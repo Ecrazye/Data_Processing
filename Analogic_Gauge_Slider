@@ -1,0 +1,134 @@
+function Analogic_Gauge_Slider()
+    % Crear la figura principal
+    fig = figure('Name', 'Tacómetro GUI', 'NumberTitle', 'off', 'Position', [100, 100, 600, 400]);
+    
+    % Subplot para el tacómetro
+    ax1 = subplot(2, 1, 1);
+    minvalue = 0;
+    maxvalue = 100;
+    steps = 10;
+    substeps = 2;
+    textsteps = 2; % Ajuste este valor según sea necesario
+    unit = 'rpm'; % Unidades: revoluciones por minuto
+    
+    % Incremento del valor con un paso
+    stepvalue = (maxvalue - minvalue) / steps;
+    stepangle = 1.5 * pi / steps;
+    
+    % Establecer gca
+    set(ax1, 'DataAspectRatio', [1 1 1]);
+    
+    % No mostrar ejes
+    axis(ax1, 'off');
+    
+    % Establecer límites en el eje y del tacómetro
+    axis(ax1, [-1.1 1.1 -1.1 1.1]);
+
+    % Fondo blanco
+    rectangle(ax1, 'Position', [-1.1, -1.1, 2.2, 2.2], 'Curvature', [1, 1], 'FaceColor', 'w');
+    
+    % Crear objeto tacómetro
+    objTacho.linehandle = line(ax1, 'linewidth', 2, 'xdata', [0 cos(1.25 * pi)], 'ydata', [0 sin(1.25 * pi)]);
+    objTacho.axeshandle = ax1;
+    objTacho.minvalue = minvalue;
+    objTacho.maxvalue = maxvalue;
+    objTacho.stepvalue = stepvalue;
+    objTacho.stepangle = stepangle;
+    objTacho.steps = steps;
+    objTacho.unit = unit;
+    
+    % Crear escala
+    for i = 0:steps
+        phi = -1.5 * pi / steps * i + 1.25 * pi;
+        x = cos(phi);
+        y = sin(phi);
+        
+        % Líneas de escala largas o cortas
+        if (mod(i, substeps))
+            line(ax1, [0.95 * x x], [0.95 * y y], 'Color', 'k', 'LineWidth', 1);
+        else
+            line(ax1, [0.9 * x x], [0.9 * y y], 'Color', 'k', 'LineWidth', 1);
+        end
+        
+        % Imprimir valores
+        if (~mod(i, textsteps))
+            text(ax1, x * 0.7, y * 0.7, num2str(i * stepvalue + minvalue), 'HorizontalAlignment', 'center', 'FontSize', 8);
+        end
+    end
+    
+    text(ax1, 0, -0.3, unit, 'HorizontalAlignment', 'center', 'FontSize', 10, 'FontWeight', 'bold');
+    set(ax1, 'UserData', objTacho);
+    
+    % Ajustar posición y tamaño del subplot para el tacómetro
+    ax1.Position = [0.1 0.55 0.8 0.4];
+    
+    % Crear slider
+    slider = uicontrol('Style', 'slider', 'Min', minvalue, 'Max', maxvalue, 'Value', minvalue, ...
+        'Position', [50, 10, 400, 20]); % Ajusta el ancho del slider
+    
+    % Subplot para la representación del tacómetro en función del tiempo
+    ax2 = subplot(2, 1, 2);
+    windowSize = 10; % Tamaño de la ventana en segundos
+    timeSpan = linspace(0, windowSize, 100); % Tiempo inicial
+    tacometro = zeros(1, 100); % Inicializar el tacómetro con ceros
+    lineHandle = plot(ax2, timeSpan, tacometro, 'Color', 'b', 'LineWidth', 1.5);
+    title(ax2, 'Tacómetro en función del tiempo', 'FontSize', 12, 'FontWeight', 'bold');
+    xlabel(ax2, 'Tiempo (s)', 'FontSize', 10); % Unidades: segundos
+    ylabel(ax2, 'Tacómetro (rpm)', 'FontSize', 10); % Unidades: revoluciones por minuto
+
+    % Establecer límites en el eje y de la gráfica de abajo
+    axis(ax2, [0 windowSize -5 105]);
+    
+    % Ajustar posición y tamaño del subplot para el tacómetro en función del tiempo
+    ax2.Position = [0.1 0.1 0.8 0.4];
+    
+    % Crear botón
+    startButton = uicontrol('Style', 'pushbutton', 'String', 'Iniciar medición', ...
+        'Position', [500, 10, 100, 20], 'Callback', @toggleMedicion);
+    
+    % Crear temporizador
+    updateTimer = timer('ExecutionMode', 'fixedRate', 'Period', 0.1, 'TimerFcn', @updateTacometro);
+    
+    % Variable para rastrear el estado de la medición
+    isMedicionActiva = false;
+    
+    % Iniciar el temporizador
+    start(updateTimer);
+    
+    % Función para iniciar o detener la medición
+    function toggleMedicion(~, ~)
+        if isMedicionActiva
+            isMedicionActiva = false;
+            startButton.String = 'Iniciar medición';
+        else
+            isMedicionActiva = true;
+            startButton.String = 'Detener medición';
+        end
+    end
+    
+    % Función para actualizar el tacómetro en función del tiempo
+    function updateTacometro(~, ~)
+        if ~isMedicionActiva
+            return; % Ignorar si la medición está detenida
+        end
+        value = slider.Value;
+        
+        % Asegurarse de que el valor esté dentro de los límites
+        if (value < objTacho.minvalue)
+            value = objTacho.minvalue;
+        elseif (value > objTacho.maxvalue)
+            value = objTacho.maxvalue;
+        end
+        
+        phi = -objTacho.stepangle * (value - objTacho.minvalue) / objTacho.stepvalue + 1.25 * pi;
+        set(objTacho.linehandle, 'xdata', [0 cos(phi)], 'ydata', [0 sin(phi)]);
+        
+        % Actualizar el tacómetro en función del tiempo
+        tacometro = circshift(get(lineHandle, 'YData'), [0, -1]); % Desplazar la señal a la izquierda
+        tacometro(end) = value; % Agregar el nuevo valor del tacómetro
+        set(lineHandle, 'YData', tacometro);
+    end
+    
+    % Mostrar la figura
+    fig.Visible = 'on';
+end
